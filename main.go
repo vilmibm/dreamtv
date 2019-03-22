@@ -82,11 +82,16 @@ func main() {
   }
 
   http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-    fmt.Println("got a request")
-    fmt.Println(r.URL.Path)
-    //path := r.URL.Path[7:]
+    fmt.Println("got a request for the html page")
+    w.Header().Set("Content-Type", "text/html")
+    w.WriteHeader(200)
+    // slurp a file and write it 
+  }
+
+  http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
+    fmt.Println("got a request for the stream over HTTP")
     l.RLock()
-    //ch := channels[r.URL.Path]
+    // Hardcoding this for now. unsure of direction of channels map.
     ch := channels["/movie"]
     l.RUnlock()
 
@@ -115,7 +120,6 @@ func main() {
   // The default rtmp port is 1935
   server.ListenAndServe()
 
-
   // OG examples:
 
   // ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie
@@ -134,4 +138,6 @@ func main() {
   - ./dreamtv
   - ffmpeg -re -i /home/vilmibm/Dropbox/vid/VHS/cyborg.flv -c copy -f flv rtmp://localhost/movie
   - vlc open stream rtmp://localhost:1935/movie
+
+  
 */
