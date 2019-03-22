@@ -1,104 +1,137 @@
+// Steps:
+// - plays a video, listening on localhost
+// - loads an html page with a <video> element
+// - can operate without manual ffmpeg writing(?)
+// - can switch between files
 package main
 
 import (
-	"sync"
-	"io"
-	"net/http"
-	"github.com/nareix/joy4/format"
-	"github.com/nareix/joy4/av/avutil"
-	"github.com/nareix/joy4/av/pubsub"
-	"github.com/nareix/joy4/format/rtmp"
-	"github.com/nareix/joy4/format/flv"
+  "fmt"
+  "sync"
+  "io"
+  "net/http"
+  "github.com/nareix/joy4/format"
+  "github.com/nareix/joy4/av/avutil"
+  "github.com/nareix/joy4/av/pubsub"
+  "github.com/nareix/joy4/format/rtmp"
+  "github.com/nareix/joy4/format/flv"
 )
 
 func init() {
-	format.RegisterAll()
+  format.RegisterAll()
 }
 
 type writeFlusher struct {
-	httpflusher http.Flusher
-	io.Writer
+  httpflusher http.Flusher
+  io.Writer
 }
 
 func (self writeFlusher) Flush() error {
-	self.httpflusher.Flush()
-	return nil
+  self.httpflusher.Flush()
+  return nil
 }
 
 func main() {
-	server := &rtmp.Server{}
+  server := &rtmp.Server{}
 
-	l := &sync.RWMutex{}
-	type Channel struct {
-		que *pubsub.Queue
-	}
-	channels := map[string]*Channel{}
+  l := &sync.RWMutex{}
+  type Channel struct {
+    que *pubsub.Queue
+  }
+  channels := map[string]*Channel{}
 
-	server.HandlePlay = func(conn *rtmp.Conn) {
-		l.RLock()
-		ch := channels[conn.URL.Path]
-		l.RUnlock()
+  server.HandlePlay = func(conn *rtmp.Conn) {
+    fmt.Println("Handle play")
+    fmt.Println(conn.URL.Path)
+    l.RLock()
+    ch := channels[conn.URL.Path]
+    l.RUnlock()
 
-		if ch != nil {
-			cursor := ch.que.Latest()
-			avutil.CopyFile(conn, cursor)
-		}
-	}
+    if ch != nil {
+      cursor := ch.que.Latest()
+      avutil.CopyFile(conn, cursor)
+    }
+  }
 
-	server.HandlePublish = func(conn *rtmp.Conn) {
-		streams, _ := conn.Streams()
+  server.HandlePublish = func(conn *rtmp.Conn) {
+    // This seems to *take* video from somewhere.
+    fmt.Println("Handle publish")
+    streams, _ := conn.Streams()
 
-		l.Lock()
-		ch := channels[conn.URL.Path]
-		if ch == nil {
-			ch = &Channel{}
-			ch.que = pubsub.NewQueue()
-			ch.que.WriteHeader(streams)
-			channels[conn.URL.Path] = ch
-		} else {
-			ch = nil
-		}
-		l.Unlock()
-		if ch == nil {
-			return
-		}
+    l.Lock()
+    ch := channels[conn.URL.Path]
+    if ch == nil {
+      ch = &Channel{}
+      ch.que = pubsub.NewQueue()
+      ch.que.WriteHeader(streams)
+      channels[conn.URL.Path] = ch
+    } else {
+      ch = nil
+    }
+    l.Unlock()
+    if ch == nil {
+      return
+    }
 
-		avutil.CopyPackets(ch.que, conn)
+    avutil.CopyPackets(ch.que, conn)
 
-		l.Lock()
-		delete(channels, conn.URL.Path)
-		l.Unlock()
-		ch.que.Close()
-	}
+    l.Lock()
+    delete(channels, conn.URL.Path)
+    l.Unlock()
+    ch.que.Close()
+  }
 
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		l.RLock()
-		ch := channels[r.URL.Path]
-		l.RUnlock()
+  http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+    fmt.Println("got a request")
+    fmt.Println(r.URL.Path)
+    //path := r.URL.Path[7:]
+    l.RLock()
+    //ch := channels[r.URL.Path]
+    ch := channels["/movie"]
+    l.RUnlock()
 
-		if ch != nil {
-			w.Header().Set("Content-Type", "video/x-flv")
-			w.Header().Set("Transfer-Encoding", "chunked")
-			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.WriteHeader(200)
-			flusher := w.(http.Flusher)
-			flusher.Flush()
+    if ch != nil {
+      w.Header().Set("Content-Type", "video/x-flv")
+      w.Header().Set("Transfer-Encoding", "chunked")
+      w.Header().Set("Access-Control-Allow-Origin", "*")
+      w.WriteHeader(200)
+      flusher := w.(http.Flusher)
+      flusher.Flush()
 
-			muxer := flv.NewMuxerWriteFlusher(writeFlusher{httpflusher: flusher, Writer: w})
-			cursor := ch.que.Latest()
+      muxer := flv.NewMuxerWriteFlusher(writeFlusher{httpflusher: flusher, Writer: w})
+      cursor := ch.que.Latest()
 
-			avutil.CopyFile(muxer, cursor)
-		} else {
-			http.NotFound(w, r)
-		}
-	})
+      avutil.CopyFile(muxer, cursor)
+    } else {
+      http.NotFound(w, r)
+    }
+  })
 
-	go http.ListenAndServe(":8089", nil)
+  fmt.Println("http Listening on 8089")
+  go http.ListenAndServe(":8089", nil)
 
-	server.ListenAndServe()
+  fmt.Println("rtmp listening on 1935")
 
-	// ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie
-	// ffmpeg -f avfoundation -i "0:0" .... -f flv rtmp://localhost/screen
-	// ffplay http://localhost:8089/movie
-	// ffplay http://localhost:8089/screen
+  // The default rtmp port is 1935
+  server.ListenAndServe()
+
+
+  // OG examples:
+
+  // ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie
+  // ffmpeg -f avfoundation -i "0:0" .... -f flv rtmp://localhost/screen
+  // ffplay http://localhost:8089/movie
+  // ffplay http://localhost:8089/screen
 }
+
+/*
+
+  NOTES
+
+  Nervous about the lock. I saw some weird locked behavior around opening streams (but not consistently).
+
+  I got this working with these steps:
+  - ./dreamtv
+  - ffmpeg -re -i /home/vilmibm/Dropbox/vid/VHS/cyborg.flv -c copy -f flv rtmp://localhost/movie
+  - vlc open stream rtmp://localhost:1935/movie
+*/
