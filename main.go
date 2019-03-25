@@ -86,7 +86,7 @@ func main() {
     w.Header().Set("Content-Type", "text/html")
     w.WriteHeader(200)
     // slurp a file and write it 
-  }
+  })
 
   http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
     fmt.Println("got a request for the stream over HTTP")
