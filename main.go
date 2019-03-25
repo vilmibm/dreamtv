@@ -1,8 +1,9 @@
 // Steps:
-// - plays a video, listening on localhost
-// - loads an html page with a <video> element
-// - can operate without manual ffmpeg writing(?)
-// - can switch between files
+// - [x] plays a video, listening on localhost
+// - [x] has a single video buffer instead of a map
+// - [ ] loads an html page with a <video> element
+// - [ ] can operate without manual ffmpeg writing(?)
+// - [ ] can switch between files
 package main
 
 import (
@@ -38,47 +39,42 @@ func main() {
   type Channel struct {
     que *pubsub.Queue
   }
-  channels := map[string]*Channel{}
+  var vbuf *Channel
 
   server.HandlePlay = func(conn *rtmp.Conn) {
     fmt.Println("Handle play")
     fmt.Println(conn.URL.Path)
     l.RLock()
-    ch := channels[conn.URL.Path]
     l.RUnlock()
 
-    if ch != nil {
-      cursor := ch.que.Latest()
+    if vbuf != nil {
+      cursor := vbuf.que.Latest()
       avutil.CopyFile(conn, cursor)
     }
   }
 
   server.HandlePublish = func(conn *rtmp.Conn) {
-    // This seems to *take* video from somewhere.
     fmt.Println("Handle publish")
     streams, _ := conn.Streams()
 
     l.Lock()
-    ch := channels[conn.URL.Path]
-    if ch == nil {
-      ch = &Channel{}
-      ch.que = pubsub.NewQueue()
-      ch.que.WriteHeader(streams)
-      channels[conn.URL.Path] = ch
+    fmt.Println("vbuf is %#v", vbuf)
+    if vbuf == nil {
+      vbuf = &Channel{}
+      vbuf.que = pubsub.NewQueue()
+      vbuf.que.WriteHeader(streams)
     } else {
-      ch = nil
+      vbuf = nil
     }
     l.Unlock()
-    if ch == nil {
+    if vbuf == nil {
       return
     }
+    fmt.Println("vbuf is %#v", vbuf)
 
-    avutil.CopyPackets(ch.que, conn)
+    avutil.CopyPackets(vbuf.que, conn)
 
-    l.Lock()
-    delete(channels, conn.URL.Path)
-    l.Unlock()
-    ch.que.Close()
+    vbuf.que.Close()
   }
 
   http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -90,12 +86,9 @@ func main() {
 
   http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
     fmt.Println("got a request for the stream over HTTP")
-    l.RLock()
-    // Hardcoding this for now. unsure of direction of channels map.
-    ch := channels["/movie"]
-    l.RUnlock()
+    fmt.Println("vbuf is %#v", vbuf)
 
-    if ch != nil {
+    if vbuf != nil {
       w.Header().Set("Content-Type", "video/x-flv")
       w.Header().Set("Transfer-Encoding", "chunked")
       w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -104,7 +97,7 @@ func main() {
       flusher.Flush()
 
       muxer := flv.NewMuxerWriteFlusher(writeFlusher{httpflusher: flusher, Writer: w})
-      cursor := ch.que.Latest()
+      cursor := vbuf.que.Latest()
 
       avutil.CopyFile(muxer, cursor)
     } else {
@@ -139,5 +132,4 @@ func main() {
   - ffmpeg -re -i /home/vilmibm/Dropbox/vid/VHS/cyborg.flv -c copy -f flv rtmp://localhost/movie
   - vlc open stream rtmp://localhost:1935/movie
 
-  
 */
