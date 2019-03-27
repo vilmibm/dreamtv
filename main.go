@@ -9,12 +9,14 @@ import (
   "fmt"
   "sync"
   "io"
+  "log"
   "net/http"
   "github.com/nareix/joy4/format"
   "github.com/nareix/joy4/av/avutil"
   "github.com/nareix/joy4/av/pubsub"
   "github.com/nareix/joy4/format/rtmp"
   "github.com/nareix/joy4/format/flv"
+  "github.com/gorilla/websocket"
 )
 
 func init() {
@@ -31,7 +33,73 @@ func (self writeFlusher) Flush() error {
   return nil
 }
 
+var clients = make(map[*websocket.Conn]bool) // connected clients
+var broadcast = make(chan Message) // broadcast channel
+var upgrader = websocket.Upgrader{}
+
+type Message struct {
+  Username string `json:"username"`
+  Message string `json:"message"`
+}
+
+func handleConnections(w http.ResponseWriter, r *http.Request) {
+  // Upgrade initial GET request to a websocket
+  ws, err := upgrader.Upgrade(w, r, nil)
+  if err != nil {
+    log.Fatal(err)
+  }
+  defer ws.Close()
+  clients[ws] = true
+  for {
+    var msg Message
+    // read in new message as json and map to a message object
+    err := ws.ReadJSON(&msg)
+    if err != nil {
+      log.Printf("error: %v", err)
+      delete(clients, ws)
+      break
+    }
+    // send received message to broadcast channel
+    broadcast <- msg
+  }
+}
+
+func handleMessages() {
+  for {
+    // grab next message from broadcast channel
+    msg := <-broadcast
+    // send out to every client that is connected
+    for client := range clients {
+      err := client.WriteJSON(msg)
+      if err != nil {
+        log.Printf("error: %v", err)
+        client.Close()
+        delete(clients, client)
+      }
+    }
+  }
+}
+
 func main() {
+  // putting chat code in main for now - no idea how go works w/ abstracting
+  // stuff out yet
+
+  // fileserver to serve http + assets
+  fs := http.FileServer(http.Dir("./public"))
+  http.Handle("/", fs)
+  http.HandleFunc("/ws", handleConnections)
+  // start listening for incoming chat messages
+  go handleMessages()
+  // start server on localhost 8000 and log errors
+  log.Println("http server started on :8000")
+  err := http.ListenAndServe(":8000", nil)
+  if err != nil {
+    log.Fatal("ListenAndServe: ", err)
+  }
+
+
+  // below is nate's rtmp code
+
   server := &rtmp.Server{}
 
   l := &sync.RWMutex{}
@@ -81,12 +149,12 @@ func main() {
     ch.que.Close()
   }
 
-  http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-    fmt.Println("got a request for the html page")
-    w.Header().Set("Content-Type", "text/html")
-    w.WriteHeader(200)
-    // slurp a file and write it 
-  }
+  // http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+  //   fmt.Println("got a request for the html page")
+  //   w.Header().Set("Content-Type", "text/html")
+  //   w.WriteHeader(200)
+  //   // slurp a file and write it
+  // })
 
   http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
     fmt.Println("got a request for the stream over HTTP")
