@@ -2,9 +2,9 @@
 // - [x] plays a video, listening on localhost
 // - [x] has a single video buffer instead of a map
 // - [ ] can take a arg for working directory
-// - [ ] can call out to ffmpeg to publish files
-// - [ ] loads an html page with a <video> element
-// - [ ] can operate without manual ffmpeg writing(?)
+// - [x] can call out to ffmpeg to publish files
+// - [x] loads an html page
+// - [ ] html page has flvjs on it
 // - [ ] can switch between files
 package main
 
@@ -179,24 +179,3 @@ func main() {
   log.Println("http server listening on 8089")
   http.ListenAndServe(":8089", nil)
 }
-
-/*
-
-  NOTES
-
-
-  OG examples:
-
-  ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie
-  ffmpeg -f avfoundation -i "0:0" .... -f flv rtmp://localhost/screen
-  ffplay http://localhost:8089/movie
-  ffplay http://localhost:8089/screen
-
-  Nervous about the lock. I saw some weird locked behavior around opening streams (but not consistently).
-
-  I got this working with these steps:
-  - ./dreamtv
-  - ffmpeg -re -i /home/vilmibm/Dropbox/vid/VHS/cyborg.flv -c copy -f flv rtmp://localhost/movie
-  - vlc open stream rtmp://localhost:1935/movie
-
-*/
