@@ -9,14 +9,12 @@
 package main
 
 import (
-  "fmt"
   "sync"
   "io"
   "os"
   "os/exec"
   "log"
   "net/http"
-  "time"
   "github.com/nareix/joy4/format"
   "github.com/nareix/joy4/av/avutil"
   "github.com/nareix/joy4/av/pubsub"
@@ -40,9 +38,7 @@ func (self writeFlusher) Flush() error {
 }
 
 func insertTape() {
-  log.Println("sleeping")
-  time.Sleep(30)
-  log.Println("woke up")
+  log.Println("inserting tape")
 
   path := os.ExpandEnv("$HOME/src/dreamtv/cyborg.flv")
 
@@ -110,18 +106,8 @@ func main() {
   fs := http.FileServer(http.Dir("./public"))
   http.Handle("/", fs)
   http.HandleFunc("/ws", handleConnections)
-  // start listening for incoming chat messages
-  go handleMessages()
-  // start server on localhost 8000 and log errors
 
-  // curiouser: this was blocking the rest of main so i made it a goroutine.
-  go http.ListenAndServe(":8000", nil)
-  log.Println("http server started on :8000")
-  // if err != nil {
-  //   log.Fatal("ListenAndServe: ", err)
-  // }
-
-  server := &rtmp.Server{}
+  rtmpServer := &rtmp.Server{}
 
   l := &sync.RWMutex{}
   type Channel struct {
@@ -129,11 +115,8 @@ func main() {
   }
   var vbuf *Channel
 
-  server.HandlePlay = func(conn *rtmp.Conn) {
-    fmt.Println("Handle play")
-    fmt.Println(conn.URL.Path)
-    l.RLock()
-    l.RUnlock()
+  rtmpServer.HandlePlay = func(conn *rtmp.Conn) {
+    log.Println("Handle play")
 
     if vbuf != nil {
       cursor := vbuf.que.Latest()
@@ -141,12 +124,11 @@ func main() {
     }
   }
 
-  server.HandlePublish = func(conn *rtmp.Conn) {
-    fmt.Println("Handle publish")
+  rtmpServer.HandlePublish = func(conn *rtmp.Conn) {
+    log.Println("Handle publish")
     streams, _ := conn.Streams()
 
     l.Lock()
-    fmt.Println("vbuf is %#v", vbuf)
     if vbuf == nil {
       vbuf = &Channel{}
       vbuf.que = pubsub.NewQueue()
@@ -158,7 +140,7 @@ func main() {
     if vbuf == nil {
       return
     }
-    fmt.Println("vbuf is %#v", vbuf)
+    log.Println("vbuf is %#v", vbuf)
 
     avutil.CopyPackets(vbuf.que, conn)
 
@@ -166,8 +148,7 @@ func main() {
   }
 
   http.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
-    fmt.Println("got a request for the stream over HTTP")
-    fmt.Println("vbuf is %#v", vbuf)
+    log.Println("got a request for the stream over HTTP")
 
     if vbuf != nil {
       w.Header().Set("Content-Type", "video/x-flv")
@@ -186,26 +167,30 @@ func main() {
     }
   })
 
-  fmt.Println("http Listening on 8089")
-  go http.ListenAndServe(":8089", nil)
+  // Start up our various goroutines. The final server init can't be run with `go` since the program
+  // will exit immediately if the main thread is finished. it's kind of arbitrary what server loop
+  // we end on; just, one of them has to be the one that keeps the main thread alive.
 
-  fmt.Println("rtmp listening on 1935")
-
+  go rtmpServer.ListenAndServe()
+  log.Println("rtmp server listening on 1935")
   go insertTape()
-  // The default rtmp port is 1935
-  server.ListenAndServe()
+  go handleMessages() // start listening for incoming chat messages
 
-  // OG examples:
-
-  // ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie
-  // ffmpeg -f avfoundation -i "0:0" .... -f flv rtmp://localhost/screen
-  // ffplay http://localhost:8089/movie
-  // ffplay http://localhost:8089/screen
+  log.Println("http server listening on 8089")
+  http.ListenAndServe(":8089", nil)
 }
 
 /*
 
   NOTES
+
+
+  OG examples:
+
+  ffmpeg -re -i movie.flv -c copy -f flv rtmp://localhost/movie
+  ffmpeg -f avfoundation -i "0:0" .... -f flv rtmp://localhost/screen
+  ffplay http://localhost:8089/movie
+  ffplay http://localhost:8089/screen
 
   Nervous about the lock. I saw some weird locked behavior around opening streams (but not consistently).
 
