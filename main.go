@@ -12,6 +12,7 @@ import (
   "fmt"
   "sync"
   "io"
+  "os"
   "os/exec"
   "log"
   "net/http"
@@ -43,7 +44,7 @@ func insertTape() {
   time.Sleep(30)
   log.Println("woke up")
 
-  path := "/home/vilmibm/src/dreamtv/cyborg.flv"
+  path := os.ExpandEnv("$HOME/src/dreamtv/cyborg.flv")
 
   // TODO support -ss option for seeking
   ffmpegCmd := exec.Command("ffmpeg", "-re",  "-i", path, "-c", "copy", "-f", "flv", "rtmp://localhost/movie") // TODO dynamic
