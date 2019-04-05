@@ -15,6 +15,7 @@ import (
   "os/exec"
   "log"
   "net/http"
+  "time"
   "github.com/nareix/joy4/format"
   "github.com/nareix/joy4/av/avutil"
   "github.com/nareix/joy4/av/pubsub"
@@ -37,9 +38,20 @@ func (self writeFlusher) Flush() error {
   return nil
 }
 
-func getCmd(filepath string) string {
+func insertTape() {
+  log.Println("sleeping")
+  time.Sleep(30)
+  log.Println("woke up")
+
+  path := "/home/vilmibm/src/dreamtv/cyborg.flv"
+
   // TODO support -ss option for seeking
-  return fmt.Sprintf("ffmpeg -re -i %s -c copy -f flv rtmp://localhost/movie", filepath)
+  ffmpegCmd := exec.Command("ffmpeg", "-re",  "-i", path, "-c", "copy", "-f", "flv", "rtmp://localhost/movie") // TODO dynamic
+  out, err := ffmpegCmd.Output()
+  if err != nil {
+    panic(err)
+  }
+  log.Println(string(out))
 }
 
 var clients = make(map[*websocket.Conn]bool) // connected clients
@@ -100,14 +112,13 @@ func main() {
   // start listening for incoming chat messages
   go handleMessages()
   // start server on localhost 8000 and log errors
+
+  // curiouser: this was blocking the rest of main so i made it a goroutine.
+  go http.ListenAndServe(":8000", nil)
   log.Println("http server started on :8000")
-  err := http.ListenAndServe(":8000", nil)
-  if err != nil {
-    log.Fatal("ListenAndServe: ", err)
-  }
-
-
-  // below is nate's rtmp code
+  // if err != nil {
+  //   log.Fatal("ListenAndServe: ", err)
+  // }
 
   server := &rtmp.Server{}
 
@@ -179,6 +190,7 @@ func main() {
 
   fmt.Println("rtmp listening on 1935")
 
+  go insertTape()
   // The default rtmp port is 1935
   server.ListenAndServe()
 
