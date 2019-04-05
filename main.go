@@ -1,6 +1,8 @@
 // Steps:
 // - [x] plays a video, listening on localhost
 // - [x] has a single video buffer instead of a map
+// - [ ] can take a arg for working directory
+// - [ ] can call out to ffmpeg to publish files
 // - [ ] loads an html page with a <video> element
 // - [ ] can operate without manual ffmpeg writing(?)
 // - [ ] can switch between files
@@ -10,6 +12,7 @@ import (
   "fmt"
   "sync"
   "io"
+  "os/exec"
   "net/http"
   "github.com/nareix/joy4/format"
   "github.com/nareix/joy4/av/avutil"
@@ -30,6 +33,11 @@ type writeFlusher struct {
 func (self writeFlusher) Flush() error {
   self.httpflusher.Flush()
   return nil
+}
+
+func getCmd(filepath string) string {
+  // TODO support -ss option for seeking
+  return fmt.Sprintf("ffmpeg -re -i %s -c copy -f flv rtmp://localhost/movie", filepath)
 }
 
 func main() {
