@@ -10,17 +10,14 @@ new Vue({
   created: function() {
     var self = this;
     this.ws = new WebSocket('ws://' + window.location.host + '/ws');
+    window.addEventListener('beforeunload', this.leaving);
     this.ws.addEventListener('message', function(e) {
       var msg = JSON.parse(e.data);
-      self.chatContent +=
-        '<li>' +
-        '<div class="badge badge-pill badge-dark">' +
-        msg.username +
-        '</div>' +
-        emojione.toImage(msg.message) + // Parse emojis
-        '</li>';
-      var element = document.getElementById('chat-messages');
+      self.chatContent += `<li><div class="badge badge-pill badge-dark">${
+        msg.username
+      }</div>${emojione.toImage(msg.message)}</li>`;
       // Auto scroll to the bottom, timeout to stop race condition
+      var element = document.getElementById('chat-messages');
       const isScrolledToBottom =
         element.scrollHeight - element.clientHeight <= element.scrollTop + 1;
       if (isScrolledToBottom) {
@@ -46,7 +43,7 @@ new Vue({
     },
     join: function() {
       if (!this.username) {
-        Materialize.toast('You must choose a username', 2000);
+        alert('You must choose a username to chat.');
         return;
       }
       this.username = $('<p>')
@@ -58,9 +55,21 @@ new Vue({
           username: 'bot',
           message: $('<p>')
             .html(`>>> ${this.username} has joined >>>`)
-            .text() // Strip out html
+            .text()
         })
       );
+    },
+    leaving: function() {
+      if (this.joined) {
+        this.ws.send(
+          JSON.stringify({
+            username: 'bot',
+            message: $('<p>')
+              .html(`<<< ${this.username} has left <<<`)
+              .text()
+          })
+        );
+      }
     }
   }
 });

@@ -3,6 +3,17 @@ body {
   font-family: 'VT323', monospace;
 }
 
+#program-guide {
+  height: 20vh;
+  width: 100%;
+  overflow-y: scroll;
+  background-color: #222;
+  color: #aaa;
+  font-size: 18px;
+  border: 1px solid #343a40;
+  border-radius: 0.25rem;
+}
+
 #chat-messages {
   min-height: 10vh;
   height: 60vh;
@@ -11,7 +22,7 @@ body {
   background-color: #222;
   color: #aaa;
   font-size: 18px;
-  padding: 0.5rem 0.5rem;
+  padding: 0.3rem 0.3rem;
   border: 1px solid #343a40;
   border-radius: 0.25rem;
 }
@@ -35,5 +46,13 @@ body {
 
 #chat-messages .badge {
   margin-right: 4px;
+}
+
+#program-guide > ul > .list-group-item {
+  padding: 5px;
+  color: #aaa;
+  font-size: 14px;
+  background-color: #222;
+  border-top: 1px solid #fff;
 }
 
