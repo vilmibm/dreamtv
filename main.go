@@ -68,6 +68,8 @@ func handleConnections(w http.ResponseWriter, r *http.Request) {
   }
   defer ws.Close()
   clients[ws] = true
+  // TODO: can get number of clients from this:
+  log.Printf("# clients connected: %v\n", len(clients));
   for {
     var msg Message
     // read in new message as json and map to a message object
@@ -179,3 +181,4 @@ func main() {
   log.Println("http server listening on 8089")
   http.ListenAndServe(":8089", nil)
 }
+

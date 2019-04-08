@@ -13,14 +13,21 @@ new Vue({
     this.ws.addEventListener('message', function(e) {
       var msg = JSON.parse(e.data);
       self.chatContent +=
-        '<div class="chip">' +
+        '<li>' +
+        '<div class="badge badge-pill badge-dark">' +
         msg.username +
         '</div>' +
-        emojione.toImage(msg.message) +
-        '<br/>'; // Parse emojis
-
+        emojione.toImage(msg.message) + // Parse emojis
+        '</li>';
       var element = document.getElementById('chat-messages');
-      element.scrollTop = element.scrollHeight; // Auto scroll to the bottom
+      // Auto scroll to the bottom, timeout to stop race condition
+      const isScrolledToBottom =
+        element.scrollHeight - element.clientHeight <= element.scrollTop + 1;
+      if (isScrolledToBottom) {
+        setTimeout(function() {
+          element.scrollTop = element.scrollHeight;
+        }, 1);
+      }
     });
   },
   methods: {
@@ -46,6 +53,15 @@ new Vue({
         .html(this.username)
         .text();
       this.joined = true;
+      this.ws.send(
+        JSON.stringify({
+          username: 'bot',
+          message: $('<p>')
+            .html(`>>> ${this.username} has joined >>>`)
+            .text() // Strip out html
+        })
+      );
     }
   }
 });
+
