@@ -11,10 +11,10 @@ package main
 import (
   "sync"
   "io"
-  "os"
   "os/exec"
   "log"
   "net/http"
+  "path/filepath"
   "github.com/nareix/joy4/format"
   "github.com/nareix/joy4/av/avutil"
   "github.com/nareix/joy4/av/pubsub"
@@ -40,7 +40,7 @@ func (self writeFlusher) Flush() error {
 func insertTape() {
   log.Println("inserting tape")
 
-  path := os.ExpandEnv("$HOME/src/dreamtv/cyborg.flv")
+  path, _ := filepath.Abs("./cyborg.flv")
 
   // TODO support -ss option for seeking
   ffmpegCmd := exec.Command("ffmpeg", "-re",  "-i", path, "-c", "copy", "-f", "flv", "rtmp://localhost/movie") // TODO dynamic

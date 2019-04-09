@@ -13,7 +13,7 @@ new Vue({
     window.addEventListener('beforeunload', this.leaving);
     this.ws.addEventListener('message', function(e) {
       var msg = JSON.parse(e.data);
-      self.chatContent += `<li><div class="badge badge-pill badge-dark">${
+      self.chatContent += `<li><div class="badge badge-dark">${
         msg.username
       }</div>${emojione.toImage(msg.message)}</li>`;
       // Auto scroll to the bottom, timeout to stop race condition
