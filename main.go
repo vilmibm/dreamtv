@@ -9,12 +9,12 @@
 package main
 
 import (
+  "github.com/vilmibm/dreamtv/scheduler"
   "sync"
+  "flag"
   "io"
-  "os/exec"
   "log"
   "net/http"
-  "path/filepath"
   "github.com/nareix/joy4/format"
   "github.com/nareix/joy4/av/avutil"
   "github.com/nareix/joy4/av/pubsub"
@@ -35,20 +35,6 @@ type writeFlusher struct {
 func (self writeFlusher) Flush() error {
   self.httpflusher.Flush()
   return nil
-}
-
-func insertTape() {
-  log.Println("inserting tape")
-
-  path, _ := filepath.Abs("./cyborg.flv")
-
-  // TODO support -ss option for seeking
-  ffmpegCmd := exec.Command("ffmpeg", "-re",  "-i", path, "-c", "copy", "-f", "flv", "rtmp://localhost/movie") // TODO dynamic
-  out, err := ffmpegCmd.Output()
-  if err != nil {
-    panic(err)
-  }
-  log.Println(string(out))
 }
 
 var clients = make(map[*websocket.Conn]bool) // connected clients
@@ -103,6 +89,12 @@ func handleMessages() {
 func main() {
   // putting chat code in main for now - no idea how go works w/ abstracting
   // stuff out yet
+
+  var tvdir string
+  var dbfile string
+
+  flag.StringVar(&tvdir, "tvdir", "/tvdir", "directory with channel directories and a db file")
+  flag.StringVar(&dbfile, "dbfile", "dreamtv.db", "db file relative to tvdir")
 
   // fileserver to serve http + assets
   fs := http.FileServer(http.Dir("./public"))
@@ -175,8 +167,8 @@ func main() {
 
   go rtmpServer.ListenAndServe()
   log.Println("rtmp server listening on 1935")
-  go insertTape()
   go handleMessages() // start listening for incoming chat messages
+  go scheduler.StartScheduler(tvdir, dbfile)
 
   log.Println("http server listening on 8089")
   http.ListenAndServe(":8089", nil)
