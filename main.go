@@ -93,6 +93,7 @@ func main() {
   var tvdir string
   var dbfile string
 
+  var resetdb = flag.Bool("resetdb", false, "set to true to force recreating the database tables")
   flag.StringVar(&tvdir, "tvdir", "/tvdir", "directory with channel directories and a db file")
   flag.StringVar(&dbfile, "dbfile", "dreamtv.db", "db file relative to tvdir")
 
@@ -168,7 +169,7 @@ func main() {
   go rtmpServer.ListenAndServe()
   log.Println("rtmp server listening on 1935")
   go handleMessages() // start listening for incoming chat messages
-  go scheduler.StartScheduler(tvdir, dbfile)
+  go scheduler.StartScheduler(tvdir, dbfile, *resetdb)
 
   log.Println("http server listening on 8089")
   http.ListenAndServe(":8089", nil)
