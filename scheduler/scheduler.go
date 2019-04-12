@@ -31,7 +31,7 @@ func ensureSchema(conn *sql.DB, force bool) {
     filename TEXT NOT NULL,
     channel TEXT NOT NULL,
     playcount INTEGER DEFAULT 0,
-    lastplayed DATETIME,
+    lastplayed DATETIME
   )`
   dropSql := "DROP TABLE IF EXISTS videos"
   if force {

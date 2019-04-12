@@ -14,6 +14,7 @@ import (
   "flag"
   "io"
   "log"
+  "os"
   "net/http"
   "github.com/nareix/joy4/format"
   "github.com/nareix/joy4/av/avutil"
@@ -93,9 +94,17 @@ func main() {
   var tvdir string
   var dbfile string
 
+  //var help = flag.Bool()
+  var help = flag.Bool("help", false, "print usage")
   var resetdb = flag.Bool("resetdb", false, "set to true to force recreating the database tables")
   flag.StringVar(&tvdir, "tvdir", "/tvdir", "directory with channel directories and a db file")
   flag.StringVar(&dbfile, "dbfile", "dreamtv.db", "db file relative to tvdir")
+  flag.Parse()
+
+  if *help {
+    flag.PrintDefaults()
+    os.Exit(0)
+  }
 
   // fileserver to serve http + assets
   fs := http.FileServer(http.Dir("./public"))
