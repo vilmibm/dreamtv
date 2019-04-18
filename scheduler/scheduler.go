@@ -3,10 +3,20 @@ package scheduler
 import  (
   "database/sql"
   "log"
+  "os"
   "os/exec"
   "path/filepath"
+  "time"
   _ "github.com/mattn/go-sqlite3"
 )
+
+type VideoFile struct {
+  id int
+  filename string
+  channel string
+  playcount int
+  lastplayed time.Time
+}
 
 func insertTape() {
   log.Println("inserting tape")
@@ -58,8 +68,61 @@ func syncLibrary(tvdir string, conn *sql.DB, resetdb bool) {
   // - play count and last played for every file
   log.Println("scanning", tvdir, "for video files")
   ensureSchema(conn, resetdb)
-  // TODO for each file in db, ensure it exists on disk
-  // TODO walk dir, adding files as needed
+  allvids := "SELECT id, channel, filename FROM videos"
+  videoRows, err := conn.Query(allvids)
+  if err != nil { panic(err) }
+  defer videoRows.Close() // TODO cargo coding
+
+  var staleIDs []int
+
+  // TODO reminder that this is untested until there are actually files in there
+  for videoRows.Next() {
+    video := VideoFile{}
+    err := videoRows.Scan(&video.id, &video.channel, &video.filename)
+    if err != nil { panic(err) }
+    log.Println("found", video.channel, video.filename)
+    videoPath := filepath.Join(tvdir, "channels", video.channel, video.filename)
+    _, err = os.Stat(videoPath)
+    if err != nil {
+      log.Println("found non-existent file with id", video.id, videoPath)
+      staleIDs = append(staleIDs, video.id)
+    }
+  }
+
+  for _, id := range staleIDs {
+    stmt, err := conn.Prepare("DELETE FROM videos WHERE id = ?")
+    if err != nil { panic(err) }
+    defer stmt.Close() // cargo coding
+    _, err2 := stmt.Exec(id)
+    if err2 != nil { panic(err2) }
+  }
+
+  err3 := filepath.Walk(filepath.Join(tvdir, "channels"), func(path string, info os.FileInfo, err error) error {
+    if err != nil { return err }
+    if info.IsDir() { return nil }
+    channelPath, filename := filepath.Split(path)
+    channel := filepath.Base(channelPath)
+    log.Printf("Found file %v on channel %v on disk", filename, channel)
+    row := conn.QueryRow("SELECT id FROM videos WHERE channel = ? AND filename = ?", channel, filename)
+    video := VideoFile{}
+    err2 := row.Scan(&video.id)
+    if err2 == sql.ErrNoRows {
+      log.Println("File", filename, "not in DB, gonna insert")
+      _, err3 := conn.Exec("INSERT INTO videos (channel, filename) VALUES (?, ?)", channel, filename)
+      if err3 != nil {
+        panic(err3)
+      }
+    } else if err2 != nil {
+      panic(err2)
+    }
+
+    return nil
+  })
+
+  if err3 != nil {
+    log.Println("failed to walk the channels directory")
+    panic(err3)
+  }
 }
 
 func StartScheduler(tvdir string, dbfile string, resetdb bool) {
