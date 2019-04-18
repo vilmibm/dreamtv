@@ -75,7 +75,6 @@ func syncLibrary(tvdir string, conn *sql.DB, resetdb bool) {
 
   var staleIDs []int
 
-  // TODO reminder that this is untested until there are actually files in there
   for videoRows.Next() {
     video := VideoFile{}
     err := videoRows.Scan(&video.id, &video.channel, &video.filename)
