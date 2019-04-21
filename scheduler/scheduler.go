@@ -171,6 +171,53 @@ func StartScheduler(tvdir string, dbfile string, resetdb bool) {
   }
   syncLibrary(tvdir, conn, resetdb)
 
+  // TODO time to actually generate a schedule
+  /*
+    questions
+    - how to manage the 24 hour loop
+    - how to store the schedule
+
+    should schedule go in db? this would allow you to see past schedules. it's not worth doing just
+    to enable seeing past schedules imo. i like it in db because:
+    - if server restarts it can look for current schedule
+    - i'm not super confident in my ability to safely share memory in Go
+
+    so then i'm going to need a schema for this.
+
+    more questions:
+    - how to know length of video file? can ffmpeg report on this? TODO
+    - how to actually ... store the schedule?
+      so a scheudle is:
+      {channel_name: [vid id, vid id, vid id, vid id],
+       channel_name: [vid id, vid id, vid id, vid id]}
+
+      i could...
+
+      CREATE TABLE schedule(
+        id INTEGER PRIMARY KEY,
+        channel TEXT,
+        vid_ids TEXT
+        start DATETIME
+      )
+
+      they're all gonna have a matching start.
+
+      the vid_ids thing is definitely a sql smell. the problem is i need to capture ordering, which
+      sql isn't awesome at. the "correct" solution is probably storing each vid_id with a start time
+      but honestly that's brittle anyway?
+
+      thinking more, the problem comes back to vid lengths. i don't want timestamps for each
+      scheduled vid id but i do want offsets, yeah? or at least i need to have video lengths stored
+      for each video file.
+
+      i need to be able to say: given channel C and timestamp T, at what point in what video file should i be streaming?
+
+      answer would be: find the schedule row for channel C whose start is (max(start < T)), compute
+      diff between T and start, sum the vid_ids' lengths until sum > T, then seek and stream vidfile.
+
+      but, I have to start by answering how i can compute vidfile length.
+  */
+
   insertTape()
 }
 
