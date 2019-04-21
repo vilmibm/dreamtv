@@ -2,19 +2,30 @@ package scheduler
 
 import  (
   "database/sql"
+  "encoding/json"
   "log"
   "os"
   "os/exec"
   "path/filepath"
+  "strconv"
   "time"
   _ "github.com/mattn/go-sqlite3"
 )
+
+type Probe struct {
+  Format Format `json:"format"`
+}
+
+type Format struct {
+  Duration string `json:"duration"`
+}
 
 type VideoFile struct {
   id int
   filename string
   channel string
   playcount int
+  duration int
   lastplayed time.Time
 }
 
@@ -32,7 +43,7 @@ func insertTape() {
   log.Println(string(out))
 }
 
-// This function ensures the database has the correct schema, deleting and re-created tables if
+// This function ensures the database has the correct schema, deleting and recreating tables if
 // needed.
 func ensureSchema(conn *sql.DB, force bool) {
   log.Println("ensuring schema. this may delete play stats.")
@@ -41,6 +52,7 @@ func ensureSchema(conn *sql.DB, force bool) {
     filename TEXT NOT NULL,
     channel TEXT NOT NULL,
     playcount INTEGER DEFAULT 0,
+    duration INTEGER NOT NULL,
     lastplayed DATETIME
   )`
   dropSql := "DROP TABLE IF EXISTS videos"
@@ -57,6 +69,29 @@ func ensureSchema(conn *sql.DB, force bool) {
     log.Println("failed to create database tables")
     panic(err)
   }
+}
+
+func determineDuration(filepath string) int {
+  ffprobeCmd := exec.Command("ffprobe", "-v",  "quiet", "-print_format", "json", "-show_format", "-show_streams", filepath)
+  out, err := ffprobeCmd.Output()
+  if err != nil {
+    panic(err)
+  }
+  var probe Probe
+
+  json.Unmarshal(out, &probe)
+
+  d, err := strconv.ParseFloat(probe.Format.Duration, 32)
+  if err != nil {
+    log.Println("could not parse video file's duration!")
+    panic(err)
+  }
+
+  duration := int(d)
+
+  log.Println("duration found for", filepath, duration)
+
+  return duration
 }
 
 // Given an absolute path to a directory with channels and a relative path to a dbfile within that
@@ -107,7 +142,8 @@ func syncLibrary(tvdir string, conn *sql.DB, resetdb bool) {
     err2 := row.Scan(&video.id)
     if err2 == sql.ErrNoRows {
       log.Println("File", filename, "not in DB, gonna insert")
-      _, err3 := conn.Exec("INSERT INTO videos (channel, filename) VALUES (?, ?)", channel, filename)
+      duration := determineDuration(path)
+      _, err3 := conn.Exec("INSERT INTO videos (channel, filename, duration) VALUES (?, ?, ?)", channel, filename, duration)
       if err3 != nil {
         panic(err3)
       }
