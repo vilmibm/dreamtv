@@ -54,8 +54,14 @@ func ensureSchema(conn *sql.DB, force bool) {
     playcount INTEGER DEFAULT 0,
     duration INTEGER NOT NULL,
     lastplayed DATETIME
+  ); 
+  CREATE TABLE IF NOT EXISTS schedules(
+    id INTEGER PRIMARY KEY,
+    channel TEXT,
+    vids TEXT,
+    start DATETIME
   )`
-  dropSql := "DROP TABLE IF EXISTS videos"
+  dropSql := "DROP TABLE IF EXISTS videos; DROP TABLE IF EXISTS schedules"
   if force {
     _, err := conn.Exec(dropSql)
     if err != nil {
@@ -158,6 +164,10 @@ func syncLibrary(tvdir string, conn *sql.DB, resetdb bool) {
     log.Println("failed to walk the channels directory")
     panic(err3)
   }
+}
+
+func generateSchedule(start time.Time) {
+  // TODO get list of channels
 }
 
 func StartScheduler(tvdir string, dbfile string, resetdb bool) {
